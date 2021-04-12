@@ -124,5 +124,5 @@ if __name__ == '__main__':
             current_state = current_state(msg_dict)
         except zmq.Again:
             # no message to receive yet, will still call the state so it can do work if necessary
-            current_state(None)
+            current_state = current_state(None)
         time.sleep(1)
