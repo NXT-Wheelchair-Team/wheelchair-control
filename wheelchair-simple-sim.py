@@ -96,7 +96,7 @@ def moving_handler(message: Union[dict, None]) -> Callable[[Union[dict, None]], 
             return finished_handler(None)  # notice this is an actual func call - send finished message immediately
         else:
             return moving_handler
-    pass  # TODO handle messages
+    return moving_handler  # TODO handle messages
 
 
 def finished_handler(message: Union[dict, None]) -> Callable[[Union[dict, None]], Callable]:
