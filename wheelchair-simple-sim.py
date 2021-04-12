@@ -1,7 +1,6 @@
 import json
 import logging
 import time
-from enum import Enum, auto
 from typing import Callable, Union
 
 import zmq
@@ -35,7 +34,7 @@ def idle_handler(message: Union[dict, None]) -> Callable[[Union[dict, None]], Ca
     :return: the *_handler() method that should be called next
     """
     if message is None:
-        # don't need to do any work in the mean time, so just return this state again
+        # if you need to do any work checking sensors, maintaining comms with the Arduino, etc. this is where to do it
         return idle_handler
     logging.info("Handling message in idle state")
     bci_state = message['State']
@@ -53,16 +52,65 @@ def idle_handler(message: Union[dict, None]) -> Callable[[Union[dict, None]], Ca
 
 
 def stopped_handler(message: Union[dict, None]) -> Callable[[Union[dict, None]], Callable]:
+    """
+    Expects:
+    {
+        "MoveTo": <INTEGER_NODE>
+    }
+    """
+    if message is None:
+        # if you need to do any work checking sensors, maintaining comms with the Arduino, etc. this is where to do it
+        return stopped_handler
+
     logging.info("Handling message in the stopped state")
-    bci_request =
+    bci_move_to_node: int = message['MoveTo']
+    reply = {
+        "State": "MOVING",
+        "Node": bci_move_to_node,
+        "Reason": "Requested by BCI"
+    }
+    SOCKET.send(get_json_bytes(reply))
+    logging.debug(f"Sent reply: {reply}")
+    return moving_handler
+
+
+destination_reached = False
 
 
 def moving_handler(message: Union[dict, None]) -> Callable[[Union[dict, None]], Callable]:
-    pass
+    """
+    Expects:
+    {
+        "State": "STOP",
+        "Reason": "Requested by BCI user"
+    }
+    --or--
+    {
+        "MoveTo": <INTEGER_NODE>
+    }
+    """
+    if message is None:
+        # do some work controlling the chair or communicating with other subsystems
+
+        if destination_reached:
+            return finished_handler(None)  # notice this is an actual func call - send finished message immediately
+        else:
+            return moving_handler
+    pass  # TODO handle messages
 
 
 def finished_handler(message: Union[dict, None]) -> Callable[[Union[dict, None]], Callable]:
-    pass
+    """
+    This state probably will just send the notification before transitioning back to STOPPED.
+    """
+    assert message is None
+    reply = {
+        "State": "FINISHED",
+        "Reason": "Reached requested node"
+    }
+    SOCKET.send(get_json_bytes(reply))
+    logging.debug(f"Sent finished message: {reply}")
+    return stopped_handler
 
 
 if __name__ == '__main__':
@@ -75,5 +123,6 @@ if __name__ == '__main__':
             logging.debug(f"Parsed into dict {msg_dict}")
             current_state = current_state(msg_dict)
         except zmq.Again:
-            # no message to receive yet
+            # no message to receive yet, will still call the state so it can do work if necessary
+            current_state(None)
         time.sleep(1)
